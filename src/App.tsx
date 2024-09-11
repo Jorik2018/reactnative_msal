@@ -12,6 +12,7 @@ import {
 } from 'react-native/Libraries/NewAppScreen';
 import SignInSignOutButton from './components/SignInSignOutButton';
 import { AppAuthView } from './AppAuthView';
+import { ApihView } from './ApiView';
 
 function App() {
 
@@ -37,6 +38,7 @@ function App() {
           }}>
           <SignInSignOutButton />
           <AppAuthView />
+          <ApihView/>
         </View>
       </ScrollView>
     </SafeAreaView>
