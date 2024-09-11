@@ -17,16 +17,10 @@ const configs: {
   [key: string]: any
 } = {
   auth0: {
-    issuer: 'https://telefonicaperuscrtyb2bdev.b2clogin.com/telefonicaperuscrtyb2bdev.onmicrosoft.com/B2C_1_signupsignin1/v2.0',
-    clientId: '381a63ba-e125-40d1-810f-30ebbd0f47f0',
-    redirectUrl: 'msauth://pe.telefonica.ionicmsal/1wIqXSqBj7w%2Bh11ZifsnqwgyKrY%3D',
+    issuer: `https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/B2C_1_signupsignin1/v2.0`,
+    clientId: CLIENT_ID,
+    redirectUrl: REDIRECT_URL,
     scopes: ['openid', 'profile', 'email', 'offline_access'],
-
-    // serviceConfiguration: {
-    //   authorizationEndpoint: 'https://samples.auth0.com/authorize',
-    //   tokenEndpoint: 'https://samples.auth0.com/oauth/token',
-    //   revocationEndpoint: 'https://samples.auth0.com/oauth/revoke'
-    // }
   },
 };
 
@@ -40,10 +34,90 @@ const defaultAuthState = {
 };
 
 export const ApiView = () => {
-  const [authState, setAuthState] = useState(defaultAuthState);
-  useEffect(() => {
 
+  const getUserProfile = useCallback((accessToken: string) => {
+    axios.get('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    }).then(({ data }) => {
+      Alert.alert('Error', JSON.stringify(data));
+    }).catch((error) => {
+      Alert.alert('Error', JSON.stringify(error ? { status: error.status, error: error.error.error } : 'ERROR'));
+    });
   }, []);
+
+  const getToken = useCallback(async (code: string) => {
+    return axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
+      .then(({ data }) => {
+        const tokenEndpoint = data.token_endpoint;
+        return AsyncStorage.getItem('pkce_code_verifier')
+          .then(pkceCodeVerifier => {
+            const body = new URLSearchParams();
+            body.append('client_id', CLIENT_ID);
+            body.append('redirect_uri', REDIRECT_URL);
+            body.append('scope', 'openid profile offline_access');
+            body.append('code', code);
+            body.append('code_verifier', pkceCodeVerifier || ''); // Ensure code_verifier is set
+            body.append('grant_type', 'authorization_code');
+            const headers = {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            };
+            return axios.post(tokenEndpoint, body.toString(), { headers });
+          });
+      }).then(tokenResponse => tokenResponse.data).catch(error => {
+        console.error('Error fetching token:', error);
+        throw error;
+      });
+  }, []);
+
+  const handleDeepLink = useCallback(async ({ url }: { url?: string }) => {
+    AsyncStorage.getItem('pkce_state').then(async (state) => {
+      if (state) {
+        try {
+          if (url) {
+            const parsedUrl = new URL(url);
+            const searchParams = new URLSearchParams(parsedUrl.search);
+            const queryParams = {
+              code: searchParams.get('code'),
+              state: searchParams.get('state'),
+              error: searchParams.get('error'),
+            };
+            if (!queryParams.code || !queryParams.state) {
+              const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
+              queryParams.code = hashParams.get('code');
+              queryParams.state = hashParams.get('state');
+              queryParams.error = hashParams.get('error');
+            }
+            if (queryParams.code) {
+              await AsyncStorage.setItem('pkce_code', queryParams.code);
+            }
+          }
+          AsyncStorage.getItem('pkce_code').then((code) => {
+            if (code) {
+              getToken(code).then((tokenResponse) => {
+                if (tokenResponse) {
+                  if (tokenResponse.accessToken) {
+                    getUserProfile(tokenResponse.accessToken);
+                  }
+                }
+              });
+            }
+          });
+        } catch (error) {
+          console.error('Error handling deep link:', error);
+          Alert.alert('Error', 'An error occurred while processing the deep link.');
+        }
+      }
+    });
+  }, [getToken, getUserProfile]);
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    handleDeepLink({});
+    return () => subscription.remove();
+
+  }, [handleDeepLink]);
+
+  const [authState, setAuthState] = useState(defaultAuthState);
 
   const handleAuthorize = useCallback(async () => {
     axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
@@ -79,49 +153,22 @@ export const ApiView = () => {
   }, []);
 
   const handleRefresh = useCallback(async () => {
-    /*try {
-      const config = configs[authState.provider];
-      const newAuthState = await refresh(config, {
-        refreshToken: authState.refreshToken,
+    axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
+      .then(({ data }) => {
+        Alert.alert('Error', JSON.stringify(data));
       });
-
-      setAuthState(current => ({
-        ...current,
-        ...newAuthState,
-        refreshToken: newAuthState.refreshToken || current.refreshToken,
-      }));
-    } catch (error: { message: string }) {
-      Alert.alert('Failed to refresh token', error.message);
-    }*/
-  }, [authState]);
+  }, []);
 
   const handleRevoke = useCallback(async () => {
-    /*try {
-      const config = configs[authState.provider];
-      await revoke(config, {
-        tokenToRevoke: authState.accessToken,
-        sendClientId: true,
+    axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
+      .then(({ data }) => {
+        Alert.alert('Error', JSON.stringify(data));
       });
-
-      setAuthState({
-        provider: '',
-        accessToken: '',
-        accessTokenExpirationDate: '',
-        refreshToken: '',
-        hasLoggedInOnce: false,
-        scopes: []
-      });
-    } catch (error: { message: string }) {
-      Alert.alert('Failed to revoke token', error.message);
-    }*/
-  }, [authState]);
+  }, []);
 
   const showRevoke = useMemo(() => {
     if (authState.accessToken) {
-      const config = configs[authState.provider];
-      if (config.issuer || config.serviceConfiguration.revocationEndpoint) {
-        return true;
-      }
+      return true;
     }
     return false;
   }, [authState]);

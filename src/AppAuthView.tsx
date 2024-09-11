@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { CLIENT_ID, REDIRECT_URL, MSAL_TENANT } from 'react-native-config';
 import { Alert, View } from 'react-native';
 import {
   authorize,
@@ -19,9 +20,9 @@ const configs:{
   [key:string]: any
 } = {
   auth0: {
-    issuer: 'https://telefonicaperuscrtyb2bdev.b2clogin.com/telefonicaperuscrtyb2bdev.onmicrosoft.com/B2C_1_signupsignin1/v2.0',
-    clientId:'381a63ba-e125-40d1-810f-30ebbd0f47f0',
-    redirectUrl: 'msauth://pe.telefonica.ionicmsal/1wIqXSqBj7w%2Bh11ZifsnqwgyKrY%3D',
+    issuer: `https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/B2C_1_signupsignin1/v2.0`,
+    clientId:CLIENT_ID,
+    redirectUrl: REDIRECT_URL,
     scopes: ['openid', 'profile', 'email', 'offline_access'],
 
     // serviceConfiguration: {
