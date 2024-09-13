@@ -5,6 +5,7 @@
 # Xcode
 #
 .env
+src/config.ts
 build/
 *.pbxuser
 !default.pbxuser

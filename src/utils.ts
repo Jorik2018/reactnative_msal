@@ -1,3 +1,6 @@
+import axios from "axios";
+//import QuickCrypto from 'react-native-quick-crypto';
+
 export const generateCodeVerifier = (length: number = 43): string => {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
     let codeVerifier = '';
@@ -8,19 +11,30 @@ export const generateCodeVerifier = (length: number = 43): string => {
     return codeVerifier;
 };
 
-export const generateCodeChallenge = async (codeVerifier: string): Promise<string> => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
-
-    // Hash the codeVerifier using SHA-256
-    const hashedBuffer = await crypto.subtle.digest('SHA-256', data);
-
-    // Convert the hashed buffer to a base64 string
+export const generateCodeChallenge = (codeVerifier: string) => {
+    return axios.post('https://grupoipeys.com/wp-json/api/crypto/code-challenge', codeVerifier, {
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      }).then((response)=>{
+        return response.data;
+      });
+    /*const hashedBuffer = QuickCrypto.createHash('sha256')
+        .update(codeVerifier)
+        .digest('hex');
+    const base64String = Buffer.from(hashedBuffer, 'hex').toString('base64');
+    const codeChallenge = base64String
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    return Promise.resolve(codeChallenge);*/
+    // return crypto.subtle.digest('SHA-256', data).then((hashedBuffer) => {
+    /*Alert.alert('1111', 'base64String');
     const hashArray = Array.from(new Uint8Array(hashedBuffer));
     const base64String = btoa(String.fromCharCode.apply(null, hashArray));
-
-    // Convert base64 to base64-url format (remove padding, replace + with -, replace / with _)
-    return base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    Alert.alert('base64String', base64String);
+    return Promise.resolve(base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));*/
+    //});
 };
 
 export const generateRandomString = (length: number = 32): string => {

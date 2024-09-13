@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { CLIENT_ID, REDIRECT_URL, MSAL_TENANT } from 'react-native-config';
+import { CLIENT_ID, REDIRECT_URL, MSAL_TENANT } from './config';
 import { Alert, View } from 'react-native';
 import {
   authorize,
@@ -16,12 +16,12 @@ import {
   Heading,
 } from './components';
 
-const configs:{
-  [key:string]: any
+const configs: {
+  [key: string]: any
 } = {
   auth0: {
     issuer: `https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/B2C_1_signupsignin1/v2.0`,
-    clientId:CLIENT_ID,
+    clientId: CLIENT_ID,
     redirectUrl: REDIRECT_URL,
     scopes: ['openid', 'profile', 'email', 'offline_access'],
 
@@ -37,13 +37,16 @@ const defaultAuthState = {
   hasLoggedInOnce: false,
   provider: '',
   accessToken: '',
+  idToken: '',
   accessTokenExpirationDate: '',
   refreshToken: '',
   scopes: []
 };
 
 export const AppAuthView = () => {
+
   const [authState, setAuthState] = useState(defaultAuthState);
+
   useEffect(() => {
     prefetchConfiguration({
       warmAndPrefetchChrome: true,
@@ -52,7 +55,7 @@ export const AppAuthView = () => {
     });
   }, []);
 
-  const handleAuthorize = useCallback(async (provider:string) => {
+  const handleAuthorize = useCallback(async (provider: string) => {
     try {
       const config = configs[provider];
       const newAuthState = await authorize({
@@ -60,7 +63,7 @@ export const AppAuthView = () => {
         connectionTimeoutSeconds: 5,
         iosPrefersEphemeralSession: true,
       });
-
+      Alert.alert('newAuthState=', JSON.stringify(newAuthState));
       setAuthState({
         hasLoggedInOnce: true,
         provider: provider,
@@ -92,12 +95,13 @@ export const AppAuthView = () => {
     try {
       const config = configs[authState.provider];
       await revoke(config, {
-        tokenToRevoke: authState.accessToken,
+        tokenToRevoke: authState.accessToken || authState.refreshToken,
         sendClientId: true,
       });
 
       setAuthState({
         provider: '',
+        idToken: '',
         accessToken: '',
         accessTokenExpirationDate: '',
         refreshToken: '',
@@ -110,7 +114,7 @@ export const AppAuthView = () => {
   }, [authState]);
 
   const showRevoke = useMemo(() => {
-    if (authState.accessToken) {
+    if (authState.accessToken || authState.refreshToken) {
       const config = configs[authState.provider];
       if (config.issuer || config.serviceConfiguration.revocationEndpoint) {
         return true;
@@ -121,10 +125,12 @@ export const AppAuthView = () => {
 
   return (
     <View>
-      {authState.accessToken ? (
+      {authState.accessToken || authState.refreshToken ? (
         <Form>
           <FormLabel>accessToken</FormLabel>
           <FormValue>{authState.accessToken}</FormValue>
+          <FormLabel>idToken</FormLabel>
+          <FormValue>{authState.idToken}</FormValue>
           <FormLabel>accessTokenExpirationDate</FormLabel>
           <FormValue>{authState.accessTokenExpirationDate}</FormValue>
           <FormLabel>refreshToken</FormLabel>
@@ -139,16 +145,11 @@ export const AppAuthView = () => {
       )}
 
       <ButtonContainer>
-        {!authState.accessToken ? (
+        {!(authState.accessToken || authState.refreshToken) ? (
           <>
             <Button
-              onPress={() => handleAuthorize('identityserver')}
-              text="Authorize IdentityServer"
-              color="#DA2536"
-            />
-            <Button
               onPress={() => handleAuthorize('auth0')}
-              text="Authorize Auth0"
+              text="Authorize"
               color="#DA2536"
             />
           </>
@@ -157,8 +158,12 @@ export const AppAuthView = () => {
           <Button onPress={handleRefresh} text="Refresh" color="#24C2CB" />
         ) : null}
         {showRevoke ? (
+          <>
           <Button onPress={handleRevoke} text="Revoke" color="#EF525B" />
+          <Button onPress={handleRevoke} text="Logout API" color="#EF525B" />
+          </>
         ) : null}
+        
       </ButtonContainer>
     </View>
   );

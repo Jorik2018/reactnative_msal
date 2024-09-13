@@ -4,6 +4,7 @@
         <domain includeSubdomains="true">telefonicaperuscrtyb2bdev.b2clogin.com</domain>
         <domain includeSubdomains="true">graph.microsoft.com</domain>
         <domain includeSubdomains="true">login.microsoftonline.com</domain>
-        
+        <domain includeSubdomains="true">200.48.170.148</domain>
+        <domain includeSubdomains="true">grupoipeys.com</domain>
     </domain-config>
 </network-security-config>

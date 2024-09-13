@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { CLIENT_ID, REDIRECT_URL, MSAL_TENANT } from 'react-native-config';
+import { CLIENT_ID, REDIRECT_URL, MSAL_TENANT } from './config';
 import { Alert, Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -12,17 +12,6 @@ import {
 } from './components';
 import axios from 'axios';
 import { generateClientRequestId, generateCodeChallenge, generateRandomString, generateState } from './utils';
-
-const configs: {
-  [key: string]: any
-} = {
-  auth0: {
-    issuer: `https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/B2C_1_signupsignin1/v2.0`,
-    clientId: CLIENT_ID,
-    redirectUrl: REDIRECT_URL,
-    scopes: ['openid', 'profile', 'email', 'offline_access'],
-  },
-};
 
 const defaultAuthState = {
   hasLoggedInOnce: false,
@@ -69,9 +58,14 @@ export const ApiView = () => {
       });
   }, []);
 
-  const handleDeepLink = useCallback(async ({ url }: { url?: string }) => {
+  const handleDeepLink = useCallback(async (result: { url?: string }) => {
+    const url = result.url;
+    if (url) {
+      Alert.alert('URL', url);
+    }
     AsyncStorage.getItem('pkce_state').then(async (state) => {
       if (state) {
+        Alert.alert('URL', 'STATE=' + state + ' ' + url + '-' + JSON.stringify((await AsyncStorage.getAllKeys())));
         try {
           if (url) {
             const parsedUrl = new URL(url);
@@ -91,7 +85,9 @@ export const ApiView = () => {
               await AsyncStorage.setItem('pkce_code', queryParams.code);
             }
           }
+
           AsyncStorage.getItem('pkce_code').then((code) => {
+            //Alert.alert('Error', 'code=' + code);
             if (code) {
               getToken(code).then((tokenResponse) => {
                 if (tokenResponse) {
@@ -113,9 +109,30 @@ export const ApiView = () => {
   useEffect(() => {
     const subscription = Linking.addEventListener('url', handleDeepLink);
     handleDeepLink({});
+    // Check if the app was launched via a deep link
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) {
+          Alert.alert('getInitialURL', url);
+          //handleDeepLink({ url });
+        }
+      })
+      .catch((err) => console.error('An error occurred', err));
     return () => subscription.remove();
-
   }, [handleDeepLink]);
+
+  useEffect(() => {
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) {
+          Alert.alert('getInitialURL2', url);
+          //handleDeepLink({ url });
+        }
+      })
+      .catch((err) => {
+        Alert.alert('getInitialURL2', '22'+err);
+      });
+  }, []);
 
   const [authState, setAuthState] = useState(defaultAuthState);
 
@@ -123,29 +140,31 @@ export const ApiView = () => {
     axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
       .then((response) => {
         const { authorization_endpoint } = response.data;
-        Alert.alert('Authorization Endpoint', authorization_endpoint);
         const codeVerifier = generateRandomString(43);
-        AsyncStorage.setItem('pkce_code_verifier', codeVerifier).then(() => {
+        AsyncStorage.setItem('pkce_code_verifier', codeVerifier).then(() =>
           generateCodeChallenge(codeVerifier).then(code_challenge => {
             const state = generateState();
             AsyncStorage.setItem('pkce_state', state).then(() => {
-              const params = new URLSearchParams({
-                client_id: CLIENT_ID,
-                scope: 'openid',
-                'redirect_uri': REDIRECT_URL,
-                'client-request-id': generateClientRequestId(),
-                response_mode: 'fragment',
-                response_type: 'code',
-                client_info: '1',
-                state,
-                nonce: generateRandomString(16), // 16-character nonce
-                code_challenge,
-                code_challenge_method: 'S256'
-              }).toString();
-              Linking.openURL(`${authorization_endpoint}?${params}`);
+              const client_request_id = generateClientRequestId();
+              AsyncStorage.setItem('client_request_id', client_request_id).then(() => {
+                const params = new URLSearchParams({
+                  client_id: CLIENT_ID,
+                  scope: 'openid',
+                  'redirect_uri': REDIRECT_URL,
+                  'client-request-id': client_request_id,
+                  response_mode: 'fragment',
+                  response_type: 'code',
+                  client_info: '1',
+                  state,
+                  nonce: generateRandomString(16), // 16-character nonce
+                  code_challenge,
+                  code_challenge_method: 'S256'
+                }).toString();
+                Linking.openURL(`${authorization_endpoint}?${params}`);
+              });
             });
-          });
-        });
+          })
+        );
       }).catch((error) => {
         console.error('Error fetching authorization endpoint:', error);
         Alert.alert('Error', 'Failed to fetch the authorization endpoint.');
@@ -159,15 +178,22 @@ export const ApiView = () => {
       });
   }, []);
 
-  const handleRevoke = useCallback(async () => {
+  const handleRevoke = useCallback(() => {
     axios.get(`https://${MSAL_TENANT}.b2clogin.com/${MSAL_TENANT}.onmicrosoft.com/b2c_1_signupsignin1/v2.0/.well-known/openid-configuration`)
-      .then(({ data }) => {
-        Alert.alert('Error', JSON.stringify(data));
+      .then((response) => {
+        const { end_session_endpoint } = response.data;
+        AsyncStorage.getItem('client-request-id').then((client_request_id) => {
+          const params = new URLSearchParams({
+            'post_logout_redirect_uri': REDIRECT_URL,
+            'client-request-id': client_request_id || ''
+          }).toString();
+          Linking.openURL(`${end_session_endpoint}?${params}`);
+        });
       });
   }, []);
 
   const showRevoke = useMemo(() => {
-    if (authState.accessToken) {
+    if (authState.accessToken || authState.refreshToken) {
       return true;
     }
     return false;
@@ -204,7 +230,7 @@ export const ApiView = () => {
           <Button onPress={handleRefresh} text="Refresh" color="#24C2CB" />
         ) : null}
         {showRevoke ? (
-          <Button onPress={handleRevoke} text="Revoke" color="#EF525B" />
+          <Button onPress={handleRevoke} text="Logout" color="#EF525B" />
         ) : null}
       </ButtonContainer>
     </View>
